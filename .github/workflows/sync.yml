@@ -1,35 +1,42 @@
-name: Scheduled Repo and Submodule Sync
+name: PredictX Submodule Auto-Sync
 
 on:
   schedule:
-    # This runs every day at midnight (UTC)
     - cron: '0 0 * * *'
-  workflow_dispatch: # This allows you to run it manually with a button
+  workflow_dispatch:
 
 jobs:
-  sync:
+  update-submodules:
+    # We keep this as ubuntu-latest because it is GitHub's fastest environment.
+    # It works perfectly even if you develop on a Mac.
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Checkout your repo
+      - name: Checkout PredictX
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Sync Fork with Upstream
+      - name: Config Git User
         run: |
-          git remote add upstream https://github.com/ORIGINAL_OWNER/ORIGINAL_REPO.git || true
-          git fetch upstream
-          git checkout main
-          git merge upstream/main --ff-only || echo "Merge conflict or already up to date"
-
-      - name: Update Submodule (pimono)
-        run: |
-          git submodule update --remote --recursive
-          git add .
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-          git diff-index --quiet HEAD || git commit -m "Auto-update: Sync upstream and submodules"
-          git push
+
+      - name: Update All Submodules
+        run: |
+          # This command tells the cloud computer to check the 5 original repos
+          git submodule update --init --recursive
+          git submodule update --remote --merge
+          
+      - name: Check for changes and Push
+        run: |
+          git add .
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Auto-update: Synced all bot submodules to latest versions"
+            git push origin HEAD
+          else
+            echo "No updates found. Everything is already up to date."
+          fi
